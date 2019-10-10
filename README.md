@@ -17,6 +17,25 @@ source venv/bin/activate
 pip install -r requirements.txt
 ```
 
+## Train
+
+The ircad dataset (https://www.ircad.fr/research/3dircadb/) is used to showcase this model.
+
+```bash
+python ssbr/main.py train \
+    -c ./ssbr/configs/train.json \
+    -d ircad \
+    -o experiments/exp3
+```
+
 ## Notebooks
 
-See the training [notebook](notebooks/experiment.ipynb) for example usage
+See the experiment [notebook](notebooks/experiment.ipynb) for data and results exploration
+
+## Run tests
+
+Althought coverage is low, some critical functions are covered by unit tests.
+
+```
+pytest
+```

@@ -11,17 +11,12 @@ def vgg16_features():
     return vgg
 
 
-def ssbr_model(input_shape=(None, None, 3),
-               num_slices=8,
-               lr=0.0001,
-               batch_size=None,
-               alpha=0.5):
+def ssbr_model(input_shape=(None, None, 3), num_slices=8, lr=0.0001, batch_size=None, alpha=0.5):
     # Define stack input
     inp_stack = Input(batch_shape=(
         batch_size,
         num_slices,
-    ) + input_shape,
-                      name='input_stack')
+    ) + input_shape, name='input_stack')
 
     # Define score extractor model
     inp = Input(shape=input_shape, name='input_slice')
@@ -36,9 +31,7 @@ def ssbr_model(input_shape=(None, None, 3),
 
     # Wrap score extractor in TimeDistributed
     score_extractor = Model(inp, single_score)
-    scores = TimeDistributed(score_extractor,
-                             input_shape=(num_slices, *input_shape),
-                             name='output_stack')(inp_stack)
+    scores = TimeDistributed(score_extractor, input_shape=(num_slices, *input_shape), name='output_stack')(inp_stack)
 
     # Define losses
     m = Model(inp_stack, scores)

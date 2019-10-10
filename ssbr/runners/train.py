@@ -13,10 +13,11 @@ from ssbr.datasets.ircad import IrcadData
 from ssbr.datasets.ops import grey2rgb, image2np, rescale, resize
 from ssbr.datasets.utils import DicomVolumeStore, SSBRDataset, stack_sampler
 from ssbr.model import ssbr_model
+from ssbr import DATAFOLDER
 
 logging.basicConfig(format='%(levelname)s:%(message)s', level=logging.INFO)
 
-DATAFOLDER = Path('./data')
+# DATAFOLDER = Path('./data')
 
 
 @dataclass
@@ -35,15 +36,20 @@ class TrainConfig:
     loss_alpha: float = 0.5
 
     # Experiment config
-    num_epochs: int = 10
+    num_epochs: int = 50
     steps_per_epoch: int = 30
     valid_steps: int = 20
 
+    def __post_init__(self):
+        # Required since it could be loaded from .json which don't support tuple
+        self.resize = tuple(self.resize)
 
-def train_experiment(configdata, dataset, output):
+
+def train_experiment(config, dataset, output):
 
     ### CONFIG
-    config = TrainConfig(**configdata)
+    if not isinstance(config, TrainConfig):
+        config = TrainConfig(**config)
 
     # Build output
     output = Path(output)
@@ -82,6 +88,12 @@ def train_experiment(configdata, dataset, output):
                                   num_slices=config.num_slices,
                                   equidistance_range=config.equidistance_range)
 
+    # Save split
+    split_fp = output / 'split.json'
+    split = {'train': dataset._train_vids, 'valid': dataset._valid_vids}
+    with open(split_fp, 'w') as fid:
+        json.dump(split, fid)
+
     ### TRAINING
     model_filepath = output / 'model.h5'
     m, score_extractor = ssbr_model(lr=config.lr,
@@ -98,6 +110,12 @@ def train_experiment(configdata, dataset, output):
                            validation_data=datagen_valid,
                            validation_steps=config.valid_steps)
 
+    # Keras history has np.float32 which are not json serializable
+    class HistoryEncoder(json.JSONEncoder):
+        def default(self, obj):
+            if isinstance(obj, np.floating):
+                return float(obj)
+
     history_filepath = output / 'history.json'
     with open(history_filepath, 'w') as f:
-        json.dump(hist.history, f, indent=4)
+        json.dump(hist.history, f, indent=4, cls=HistoryEncoder)
