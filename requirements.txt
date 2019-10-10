@@ -1,0 +1,14 @@
+torch
+torchvision
+dataclasses
+tqdm
+SimpleITK
+jupyter
+ipywidgets
+matplotlib
+click
+
+# Dev requirements
+yapf
+pytest
+pytest-cov
