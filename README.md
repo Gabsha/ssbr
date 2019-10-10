@@ -1,4 +1,4 @@
-# SSBR + Pytorch
+# SSBR
 Implementation of self-supervised body part regression.
 
 Reference: 
