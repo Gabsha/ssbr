@@ -1,17 +1,22 @@
-from ssbr.datasets.ircad import IrcadDataset, IrcadData
-from ssbr.datasets.utils import DicomVolumeStore, stack_sampler, SSBRDataset
-from ssbr.datasets.ops import grey2rgb, resize, rescale, image2np
-from pathlib import Path
-import numpy as np
-from typing import Tuple
-import os
-import h5py
-from ssbr.model import ssbr_model
-from keras.callbacks import ModelCheckpoint
-from dataclasses import dataclass
-
+import json
 import logging
+import os
+from dataclasses import asdict, dataclass
+from pathlib import Path
+from typing import Tuple
+
+import h5py
+import numpy as np
+from keras.callbacks import ModelCheckpoint
+
+from ssbr.datasets.ircad import IrcadData
+from ssbr.datasets.ops import grey2rgb, image2np, rescale, resize
+from ssbr.datasets.utils import DicomVolumeStore, SSBRDataset, stack_sampler
+from ssbr.model import ssbr_model
+
 logging.basicConfig(format='%(levelname)s:%(message)s', level=logging.INFO)
+
+DATAFOLDER = Path('./data')
 
 
 @dataclass
@@ -20,51 +25,79 @@ class TrainConfig:
     # Data config
     resize: Tuple[float, float] = (64, 64)
     window: Tuple[float, float] = (-300, 700)
+    train_valid_split: float = 0.2
+    equidistance_range: Tuple[int, int] = (1, 6)
 
     # Training config
-    lr: float
-    batch_size: int
-    num_slices: int
-    loss_alpha: float
+    lr: float = 0.0001
+    batch_size: int = 5
+    num_slices: int = 8
+    loss_alpha: float = 0.5
+
+    # Experiment config
+    num_epochs: int = 10
+    steps_per_epoch: int = 30
+    valid_steps: int = 20
 
 
-def train_experiment(dataset, config, output):
+def train_experiment(configdata, dataset, output):
 
+    ### CONFIG
+    config = TrainConfig(**configdata)
+
+    # Build output
+    output = Path(output)
+    os.makedirs(output, exist_ok=True)
+
+    # Save config
+    complete_config = asdict(config)
+    config_fp = output / 'config.json'
+    with open(config_fp, 'w') as fid:
+        json.dump(complete_config, fid, indent=4)
+
+    ### DATASET
+    if dataset == 'ircad':
+        volume_folder = DATAFOLDER / 'ircad'
+        volume_files = IrcadData(volume_folder)
+    else:
+        raise NotImplementedError(f'Unknown dataset {dataset}')
+
+    # Volume transformation pipeline
     volume_transforms = [
-        resize((64, 64)),
+        resize(config.resize),
         image2np,
-        rescale(low=-300, high=700, scale=255, dtype=np.uint8),
+        rescale(low=config.window[0], high=config.window[1], scale=255, dtype=np.uint8),
         grey2rgb,
     ]
 
-    BATCH_SIZE = 4
-    NUM_SLICES = 8
+    cache = h5py.File(str(volume_folder / 'cache.h5'), 'a')
+    volumes = DicomVolumeStore(volume_files, transforms=volume_transforms, cache=cache)
+    dataset = SSBRDataset(volumes=volumes, split=config.train_valid_split)
 
-    ### DATASET
-    FOLDER = Path('./data')
-    ircad = IrcadData(FOLDER)
-    cache = h5py.File(str(FOLDER / 'ircad.h5'), 'a')
-    volumes = DicomVolumeStore(ircad, transforms=volume_transforms, cache=cache)
-    dataset = SSBRDataset(volumes=volumes, split=0.2)
-    datagen_train = dataset.train(batch_size=BATCH_SIZE, num_slices=NUM_SLICES)
-    datagen_valid = dataset.valid(batch_size=BATCH_SIZE, num_slices=NUM_SLICES)
+    datagen_train = dataset.train(batch_size=config.batch_size,
+                                  num_slices=config.num_slices,
+                                  equidistance_range=config.equidistance_range)
 
-    model_filepath = './data/model.h5'
+    datagen_valid = dataset.valid(batch_size=config.batch_size,
+                                  num_slices=config.num_slices,
+                                  equidistance_range=config.equidistance_range)
 
     ### TRAINING
-    config = {}
-    m, score_extractor = ssbr_model(lr=config.get('lr', 0.0001),
-                                    batch_size=BATCH_SIZE,
-                                    num_slices=NUM_SLICES,
-                                    alpha=config.get('alpha', 0.5))
+    model_filepath = output / 'model.h5'
+    m, score_extractor = ssbr_model(lr=config.lr,
+                                    batch_size=config.batch_size,
+                                    num_slices=config.num_slices,
+                                    alpha=config.loss_alpha)
 
-    os.makedirs(os.path.dirname(model_filepath), exist_ok=True)
-    mcp = ModelCheckpoint(filepath=model_filepath, monitor='val_loss', verbose=1, save_best_only=True)
+    mcp = ModelCheckpoint(filepath=str(model_filepath), monitor='val_loss', verbose=1, save_best_only=True)
 
-    # # Train model
     hist = m.fit_generator(generator=datagen_train,
-                           steps_per_epoch=30,
-                           epochs=10,
+                           steps_per_epoch=config.steps_per_epoch,
+                           epochs=config.num_epochs,
                            callbacks=[mcp],
                            validation_data=datagen_valid,
-                           validation_steps=20)
+                           validation_steps=config.valid_steps)
+
+    history_filepath = output / 'history.json'
+    with open(history_filepath, 'w') as f:
+        json.dump(hist.history, f, indent=4)

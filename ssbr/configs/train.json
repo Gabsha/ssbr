@@ -1,0 +1,22 @@
+{
+    "resize": [
+        64,
+        64
+    ],
+    "window": [
+        -300,
+        700
+    ],
+    "train_valid_split": 0.2,
+    "equidistance_range": [
+        1,
+        6
+    ],
+    "lr": 0.0001,
+    "batch_size": 5,
+    "num_slices": 8,
+    "loss_alpha": 0.5,
+    "num_epochs": 50,
+    "steps_per_epoch": 30,
+    "valid_steps": 20
+}

@@ -9,30 +9,34 @@ from torch.utils.data import IterableDataset
 
 
 class SSBRDataset(IterableDataset):
-    def __init__(self, volumes: Mapping, split=0.2):
+    def __init__(self, volumes: Mapping, split: float):
         self.volumes = volumes
+
+        # Build split
         num_valid = int(len(volumes) // (1 / split))
         vids = list(volumes.keys())
         self._valid_vids = random.choices(vids, k=num_valid)
         self._train_vids = list(set(vids) - set(self._valid_vids))
 
-    def train(self, batch_size=5, num_slices=8):
+    def train(self, batch_size, num_slices, equidistance_range=None):
         stacks_generator = stack_sampler(self.volumes,
+                                         batch_size=batch_size,
+                                         num_slices=num_slices,
                                          volume_ids=self._train_vids,
-                                         batch_size=batch_size,
-                                         num_slices=num_slices)
+                                         equidistance_range=equidistance_range)
         while True:
             yield (stacks_generator.__next__(), np.zeros((batch_size, num_slices, 1)))
 
-    def valid(self, batch_size=5, num_slices=8):
+    def valid(self, batch_size, num_slices, equidistance_range=None):
         stacks_generator = stack_sampler(self.volumes,
-                                         volume_ids=self._valid_vids,
                                          batch_size=batch_size,
-                                         num_slices=num_slices)
+                                         num_slices=num_slices,
+                                         volume_ids=self._valid_vids,
+                                         equidistance_range=equidistance_range)
         while True:
             yield (stacks_generator.__next__(), np.zeros((batch_size, num_slices, 1)))
 
-    def evaluate(self, batch_size=5):
+    def test(self, batch_size):
         raise NotImplementedError
 
 
@@ -66,6 +70,8 @@ class DicomVolumeStore(Mapping):
         # Handle key object
         if self.cache:
             if key not in self.cache:
+                print(f'Caching volume {key}')
+
                 # Load dicom volume
                 vol = load_dicom(self.volumes[key])
 
@@ -117,6 +123,7 @@ def slice_sampler(volume: np.ndarray, num_slices: int = 8, equidistance_range: T
 def batcher(iterable: Iterable, size: int):
     """Generate batches of items from an iterable"""
     sourceiter = iter(iterable)
+
     while True:
         try:
             batchiter = islice(sourceiter, size)
@@ -135,7 +142,7 @@ def cyclic_shuffler(items: Iterable) -> Iterator:
             yield element
 
 
-def stack_sampler(volumes: DicomVolumeStore, volume_ids=None, batch_size=5, num_slices=8):
+def stack_sampler(volumes: DicomVolumeStore, batch_size, num_slices, equidistance_range=None, volume_ids=None):
     """Sample a random batch of slice stacks"""
 
     if not volume_ids:
@@ -148,7 +155,7 @@ def stack_sampler(volumes: DicomVolumeStore, volume_ids=None, batch_size=5, num_
     volume_data = (volumes[vid] for vid in shuffled_ids)
 
     # Sample a stack of slices for each volume
-    slice_stack = (slice_sampler(vol, num_slices) for vol in volume_data)
+    slice_stack = (slice_sampler(vol, num_slices, equidistance_range) for vol in volume_data)
 
     # Batch slice stack together
     stack_batcher = batcher(slice_stack, batch_size)
