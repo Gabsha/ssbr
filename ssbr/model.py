@@ -1,7 +1,7 @@
 from keras.applications.vgg16 import VGG16
 from keras.models import Model
 from keras.layers import Input, Conv2D, Dense, GlobalAveragePooling2D, TimeDistributed, GlobalMaxPooling2D
-from keras.optimizers import rmsprop
+from keras.optimizers import RMSprop
 from ssbr.loss import loss_ssbr, loss_distance, loss_order
 
 
@@ -35,7 +35,7 @@ def ssbr_model(input_shape=(None, None, 3), num_slices=8, lr=0.0001, batch_size=
 
     # Define losses
     m = Model(inp_stack, scores)
-    opt = rmsprop(lr=lr)
+    opt = RMSprop(lr=lr)
 
     l = loss_ssbr(alpha=alpha)
     m.compile(loss=l, optimizer=opt, metrics=[loss_order, loss_distance])

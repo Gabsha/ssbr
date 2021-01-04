@@ -8,7 +8,13 @@ ipywidgets
 matplotlib
 click
 
+tensorflow-gpu
+keras
+h5py
+
 # Dev requirements
 yapf
 pytest
 pytest-cov
+
+-e .

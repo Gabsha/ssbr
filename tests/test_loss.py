@@ -52,7 +52,7 @@ def test_order_loss(loss_order_func):
 
     # Assert a single float value is yielded
     loss_rand = loss_order_func(x_batch)
-    assert isinstance(loss_rand[0], np.float32)  # Take first output
+    assert isinstance(loss_rand[0], float)  # Take first output
 
     # Assert same values are reached with numpy
     x_diff = x_batch[:, 1:] - x_batch[:, 0:-1]
@@ -79,7 +79,7 @@ def test_huber_loss(loss_huber_func):
     y_pred_np = np.random.rand(10, )
 
     loss = loss_huber_func([y_true_np, y_pred_np])
-    assert isinstance(loss[0], np.float32)
+    assert isinstance(loss[0], float)
 
     # Assert with numpy
     loss_np = np.sum(np_smooth_l1(y_true_np, y_pred_np))
@@ -93,7 +93,7 @@ def test_distance_loss(loss_distance_func):
 
     # Assert a single float value is yielded
     loss_dist = loss_distance_func(x_batch)
-    assert isinstance(loss_dist[0], np.float32)
+    assert isinstance(loss_dist[0], float)
 
     # Assert same value are reached with numpy
     x_diff = x_batch[:, 1:] - x_batch[:, 0:-1]
